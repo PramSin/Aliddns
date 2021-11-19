@@ -1,4 +1,4 @@
-package com.zngw.aliddns;
+package com.pram.aliddns;
 
 /**
  * ItemLogReason class
