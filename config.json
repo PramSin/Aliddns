@@ -3,5 +3,8 @@
   "accessKeyId": "你的AccessKeyID",
   "secret": "你的AccessKey Secret",
   "tld": "xxx.xxx",
-  "rr": "xxx"
+  "rr": "xxx",
+  "maxRuns": "10",
+  "ipv4": "true",
+  "ipv6": "false"
 }

@@ -51,8 +51,6 @@ public class DDNS {
             System.out.println("读取配置文件" + filename + "失败");
             return new String[]{"", ""};
         }
-        cfg.dnsInterval *= 1000;
-        cfg.ipInterval *= 1000;
 
         host = cfg.rr + "." + cfg.tld;
         if (cfg.rr == null || cfg.rr.length() == 0 || "@".equals(cfg.rr)) {
@@ -60,7 +58,7 @@ public class DDNS {
             cfg.rr = "@";
             host = cfg.tld;
         }
-        return new String[]{getCurrenHostIpv4(), getCurrenHostIpv6()};
+        return new String[]{cfg.ipv4 ? getCurrenHostIpv4() : "", cfg.ipv6 ? getCurrenHostIpv6() : ""};
     }
 
     private StringBuilder getJsonResponse(String json_ip) {
@@ -88,23 +86,43 @@ public class DDNS {
                     in.close();
                 }
             } catch (Exception e2) {
-                e2.printStackTrace();
+                System.out.println("网络请求失败，请检查网络状态或第三方接口地址是否正确!");
             }
         }
         return result;
     }
 
     /**
-     * 获取当前主机公网IP
+     * 获取当前主机公网IPv4
      */
     private String getCurrenHostIpv4() {
-        // 这里使用jsonip.com第三方接口获取本地IP
-        String jsonip = "https://ipv4.jsonip.com/";
+        // 这里使用ipify API第三方接口获取本地IP
+        String ipify = "https://api.ipify.org/";
 
-        StringBuilder result = getJsonResponse(jsonip);
+        StringBuilder result = getJsonResponse(ipify);
 
         //  正则表达式，提取xxx.xxx.xxx.xxx，将IP地址从接口返回结果中提取出来
         String rex = "(\\d{1,3}\\.){3}\\d{1,3}";
+        Pattern pat = Pattern.compile(rex);
+        Matcher mat = pat.matcher(result.toString());
+        String res = "";
+        if (mat.find()) {
+            res = mat.group();
+        }
+        return res;
+    }
+
+    /**
+     * 获取当前主机公网IPv6
+     */
+    private String getCurrenHostIpv6() {
+        // 这里使用ipify API第三方接口获取本地IP
+        String ipify = "https://api6.ipify.org/";
+
+        StringBuilder result = getJsonResponse(ipify);
+
+        //  正则表达式，提取xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx，将IP地址从接口返回结果中提取出来
+        String rex = "([\\da-fA-F]{1,4}:){7}[\\da-fA-F]{1,4}";
         Pattern pat = Pattern.compile(rex);
         Matcher mat = pat.matcher(result.toString());
         String res = "";
@@ -122,28 +140,11 @@ public class DDNS {
             // 调用SDK发送请求
             return client.getAcsResponse(request);
         } catch (ClientException e) {
-            e.printStackTrace();
             // 发生调用错误，抛出运行时异常
             throw new RuntimeException();
         }
     }
 
-    private String getCurrenHostIpv6() {
-        // 这里使用jsonip.com第三方接口获取本地IP
-        String jsonip = "https://ipv6.jsonip.com/";
-
-        StringBuilder result = getJsonResponse(jsonip);
-
-        //  正则表达式，提取xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx，将IP地址从接口返回结果中提取出来
-        String rex = "([\\da-fA-F]{1,4}:){7}[\\da-fA-F]{1,4}";
-        Pattern pat = Pattern.compile(rex);
-        Matcher mat = pat.matcher(result.toString());
-        String res = "";
-        if (mat.find()) {
-            res = mat.group();
-        }
-        return res;
-    }
 
     /**
      * 添加DNS解析记录
@@ -152,7 +153,7 @@ public class DDNS {
         //  修改解析记录
         AddDomainRecordRequest addDomainRecordRequest = new AddDomainRecordRequest();
         //  域名名称
-        addDomainRecordRequest.setDomainName(host);
+        addDomainRecordRequest.setDomainName(cfg.tld);
         //  主机记录
         addDomainRecordRequest.setRR(cfg.rr);
         //  将主机记录值改为当前主机IP
@@ -170,7 +171,7 @@ public class DDNS {
             //  调用SDK发送请求
             client.getAcsResponse(addDomainRecordRequest);
         } catch (ClientException e) {
-            e.printStackTrace();
+            System.out.println("Something Wrong Happens When Adding DNS Record!");
             //  发生调用错误，抛出运行时异常
             throw new RuntimeException();
         }
@@ -210,7 +211,7 @@ public class DDNS {
                 //  调用SDK发送请求
                 client.getAcsResponse(updateDomainRecordRequest);
             } catch (ClientException e) {
-                e.printStackTrace();
+                System.out.println("Something Wrong Happens When Updating DNS Record!");
                 //  发生调用错误，抛出运行时异常
                 throw new RuntimeException();
             }
@@ -222,6 +223,9 @@ public class DDNS {
         }
     }
 
+    /**
+     * 删除DNS解析记录
+     */
     private void deleteDNSRecord(DescribeSubDomainRecordsResponse.Record record, IAcsClient client, Boolean is_v6) {
         //  修改解析记录
         DeleteDomainRecordRequest deleteDomainRecordRequest = new DeleteDomainRecordRequest();
@@ -237,7 +241,7 @@ public class DDNS {
             //  调用SDK发送请求
             client.getAcsResponse(deleteDomainRecordRequest);
         } catch (ClientException e) {
-            e.printStackTrace();
+            System.out.println("Something Wrong Happens When Deleting DNS Record!");
             //  发生调用错误，抛出运行时异常
             throw new RuntimeException();
         }
@@ -275,7 +279,9 @@ public class DDNS {
         }
 
         if (ipv4.equals("")) {
-            System.out.println("本机ipv4无法获取！\n主机名 " + host + " 解析中...");
+            if (cfg.ipv4) {
+                System.out.println("本机ipv4无法获取！\n主机名 " + host + " 解析中...");
+            }
             if (v4Record != null) {
                 deleteDNSRecord(v4Record, client, false);
             }
@@ -288,7 +294,9 @@ public class DDNS {
             }
         }
         if (ipv6.equals("")) {
-            System.out.println("本机ipv6无法获取！\n主机名 " + host + " 解析中...");
+            if (cfg.ipv6) {
+                System.out.println("本机ipv6无法获取！\n主机名 " + host + " 解析中...");
+            }
             if (v6Record != null) {
                 deleteDNSRecord(v6Record, client, true);
             }
@@ -306,12 +314,14 @@ public class DDNS {
      * 运行检测
      */
     private void run(String ipv4, String ipv6) {
-        while (true) {
+        int trys = 0;
+        while (trys < Integer.parseInt(cfg.maxRuns)) {
+            trys += 1;
             try {
                 check(ipv4, ipv6);
                 break;
             } catch (Exception e) {
-                e.printStackTrace();
+                System.out.println("检查DNS解析记录与ip地址时出错！");
             }
         }
         System.out.println();
@@ -338,7 +348,7 @@ public class DDNS {
             jsonStr = sb.toString();
             return jsonStr;
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Something Wrong Happens When Reading Config File!");
             return null;
         }
     }
